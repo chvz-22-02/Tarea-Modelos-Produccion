@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="GenAI Compliance API",
-    description="API de consulta normativa SBS con RAG multimodal",
+    description="API de consulta de instrucciones SQL",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -80,8 +80,6 @@ app = FastAPI(
 
 class QueryRequest(BaseModel):
     question: str
-    date_filter: Optional[str] = None   # ej: "2024-01" para solo normas >= esa fecha
-    n_results: int = 3
 
 
 class RAGResponse(BaseModel):
