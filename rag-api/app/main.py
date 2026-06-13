@@ -260,30 +260,6 @@ async def ingest_document(
     return IngestResponse(status="ok", chunks_indexed=len(chunks), collection="ddls", chunks=chunks)
 
 
-@app.post("/query", response_model=RAGResponse)
-async def query_endpoint(
-    question: str = Form(...),
-    date_filter: Optional[str] = Form(default=None),
-    n_results: int = Form(default=3),
-):
-    """Recupera el esquema más relevante y consulta a Gemini con ese contexto."""
-    if text_collection is None or text_collection.count() == 0:
-        raise HTTPException(503, "La colección está vacía. Ingesta documentos primero con POST /ingest.")
-
-    where = {"date": {"$gte": date_filter}} if date_filter else None
-    chunks = retrieve_chunks(question, text_collection, n_results=n_results, where=where)
-
-    if not chunks:
-        raise HTTPException(404, "No se encontraron fragmentos relevantes para la query.")
-
-    ddl_context = "\n\n".join(
-        f"-- {chunk['metadata'].get('nombre', 'tabla')} --\n{chunk['metadata'].get('ddl', '')}"
-        for chunk in chunks
-    )
-
-    return build_rag_response(question, ddl_context)
-
-
 @app.post("/query/json", response_model=RAGResponse)
 async def query_json(request: QueryRequest):
     """Consulta una tabla relevante y devuelve la respuesta generada por Gemini."""
