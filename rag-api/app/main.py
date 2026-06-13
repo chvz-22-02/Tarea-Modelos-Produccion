@@ -1,114 +1,14 @@
-"""
-app/main.py — FastAPI demo para el curso GenAI Multimodal
-Instructor: Rodrigo López Vera | Revolut Perú
+"""API FastAPI para consultar esquemas DDL con Gemini y ChromaDB."""
 
-Endpoints:
-  GET  /           — health check (modelos activos + doc counts)
-  POST /ingest     — recibe documento (texto o imagen), lo indexa en ChromaDB
-  POST /query      — pregunta + imagen opcional → RAGResponse (multipart)
-  POST /query/json — pregunta en JSON puro → RAGResponse (sin imagen)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CÓMO PROBAR — GUÍA 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PASO 1 — Levanta la API
-  export GOOGLE_API_KEY="AIza..."
-  uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-PASO 2 — Ingesta documentos (necesario antes del primer query)
--- Referir a taller pasado o:
-
-  # Texto: circular SBS
-  curl -X POST http://localhost:8000/ingest \\
-       -F "file=@data/circulares_sbs/circular_B_2244_2024.md" \\
-       -F "source_id=circular_B_2244_2024" \\
-       -F "date=2024-03" \\
-       -F "doc_type=text"
-
-  # Imagen: voucher de pago
-  curl -X POST http://localhost:8000/ingest \\
-       -F "file=@data/images/voucher_yape_001.png" \\
-       -F "source_id=voucher_yape_001" \\
-       -F "date=2024-06" \\
-       -F "doc_type=image"
-
-PASO 3 — Consultas
-
-  # Query simple (JSON)
-  curl -X POST http://localhost:8000/query/json \\
-       -H "Content-Type: application/json" \\
-       -d '{"question": "¿Qué es una operación sospechosa?"}'
-
-  # Query con filtro de fecha
-  curl -X POST http://localhost:8000/query/json \\
-       -H "Content-Type: application/json" \\
-       -d '{"question": "Obligaciones del oficial de cumplimiento", "date_filter": "2024-01", "n_results": 5}'
-
-  # Query multimodal (pregunta + voucher)
-  curl -X POST http://localhost:8000/query \\
-       -F "question=¿Esta transferencia requiere reporte a la UIF?" \\
-       -F "image=@data/images/voucher_bbva_internacional_003.png"
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CÓMO PROBAR DESDE PYTHON / GOOGLE COLAB
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-  import httpx
-
-  BASE = "http://localhost:8000"   
-
-  # 1. Health check
-  print(httpx.get(f"{BASE}/").json())
-
-  # 2. Ingestar circular SBS
-  with open("data/circulares_sbs/circular_B_2244_2024.md", "rb") as f:
-      r = httpx.post(f"{BASE}/ingest",
-                     files={"file": f},
-                     data={"source_id": "circular_B_2244_2024",
-                           "date": "2024-03", "doc_type": "text"})
-  print(r.json())  # {"status": "ok", "chunks_indexed": N, "collection": "circulares_sbs"}
-
-  # 3. Ingestar voucher
-  with open("data/images/voucher_yape_001.png", "rb") as f:
-      r = httpx.post(f"{BASE}/ingest",
-                     files={"file": f},
-                     data={"source_id": "voucher_yape_001",
-                           "date": "2024-06", "doc_type": "image"})
-  print(r.json())  # {"status": "ok", "chunks_indexed": 1, "collection": "vouchers_financieros"}
-
-  # 4. Query solo texto
-  r = httpx.post(f"{BASE}/query/json",
-                 json={"question": "¿Cuál es el umbral para reportar operaciones sospechosas?"})
-  print(r.json())
-
-  # 5. Query multimodal
-  with open("data/images/voucher_bbva_internacional_003.png", "rb") as f:
-      r = httpx.post(f"{BASE}/query",
-                     data={"question": "¿Esta operación requiere reporte a la UIF?"},
-                     files={"image": f}, timeout=30)
-  print(r.json())
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SWAGGER UI — documentación interactiva en el navegador
-  http://localhost:8000/docs
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-import io
 import json
 import os
-import re
 from contextlib import asynccontextmanager
 from typing import Optional
 
 import chromadb
-import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
 from google import genai
 from google.genai import types
-from PIL import Image
 from pydantic import BaseModel
 
 
@@ -216,24 +116,6 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
         embeddings.append(result.embeddings[0].values)
     return embeddings
 
-
-def parse_md_to_articles(md_text: str, source_id: str, date: str) -> list[dict]:
-    """Divide un MD de SPIJ por artículo. Un artículo = un chunk."""
-    chunks = []
-    pattern = re.compile(r'^#{1,3}\s*Art[ií]culo\s+[\w]+', re.MULTILINE | re.IGNORECASE)
-    matches = list(pattern.finditer(md_text))
-
-    if not matches:
-        return [{"text": md_text.strip(), "source": source_id, "article": "completo", "date": date}]
-
-    for i, match in enumerate(matches):
-        start = match.start()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(md_text)
-        chunk_text = md_text[start:end].strip()
-        article_num = match.group(0).strip().split()[-1]
-        chunks.append({"text": chunk_text, "source": source_id, "article": article_num, "date": date})
-
-    return chunks
 
 def cargar_tablas(tablas: list) -> list[dict]:
     """
@@ -345,19 +227,6 @@ async def root():
 async def ingest_document(
     file: Optional[UploadFile] = File(default=None)
 ):
-    """
-    Indexa un documento en ChromaDB.
-
-    Acepta:
-    - Archivo MD/TXT + metadata (source_id, date)
-    - Texto directo como form field
-    - Imagen (PNG/JPG) → Gemini la describe → embed la descripción
-
-    Ejemplo con httpx:
-        files = {"file": open("circular.md", "rb")}
-        data = {"source_id": "circular_SBS_B_2244_2024", "date": "2024-03"}
-        r = httpx.post("/ingest", files=files, data=data)
-    """
     # -- Indexación de texto (MD/TXT) --
     global text_collection
 
@@ -393,65 +262,32 @@ async def ingest_document(
 
 @app.post("/query", response_model=RAGResponse)
 async def query_endpoint(
-    # Soportar tanto JSON puro como multipart con imagen
     question: str = Form(...),
     date_filter: Optional[str] = Form(default=None),
     n_results: int = Form(default=3),
-    image: Optional[UploadFile] = File(default=None)
 ):
-    """
-    Consulta el pipeline RAG multimodal.
+    """Recupera el esquema más relevante y consulta a Gemini con ese contexto."""
+    if text_collection is None or text_collection.count() == 0:
+        raise HTTPException(503, "La colección está vacía. Ingesta documentos primero con POST /ingest.")
 
-    Parámetros:
-        question    : pregunta del analista
-        date_filter : ej '2024-01' para solo normas posteriores
-        n_results   : cuántos chunks recuperar (default: 3)
-        image       : voucher/imagen opcional (multipart)
-
-    Ejemplo con httpx (solo texto):
-        r = httpx.post("/query", data={"question": "¿Cuál es el umbral de reporte?"})
-
-    Ejemplo con imagen:
-        files = {"image": open("voucher.png", "rb")}
-        data = {"question": "¿Requiere reporte esta operación?"}
-        r = httpx.post("/query", files=files, data=data)
-    """
-
-    if text_collection.count() == 0:
-        raise HTTPException(
-            503,
-            "La colección está vacía. Ingesta documentos primero con POST /ingest."
-        )
-
-    # Retrieval de texto normativo
     where = {"date": {"$gte": date_filter}} if date_filter else None
     chunks = retrieve_chunks(question, text_collection, n_results=n_results, where=where)
 
     if not chunks:
         raise HTTPException(404, "No se encontraron fragmentos relevantes para la query.")
 
-    # Procesar imagen si se incluyó
-    pil_image = None
-    if image is not None:
-        raw = await image.read()
-        pil_image = Image.open(io.BytesIO(raw))
+    ddl_context = "\n\n".join(
+        f"-- {chunk['metadata'].get('nombre', 'tabla')} --\n{chunk['metadata'].get('ddl', '')}"
+        for chunk in chunks
+    )
 
-    # Construir respuesta RAG
-    result = build_rag_response(question, chunks, image=pil_image)
-    return result
+    return build_rag_response(question, ddl_context)
 
 
-@app.post("/query/json")
+@app.post("/query/json", response_model=RAGResponse)
 async def query_json(request: QueryRequest):
-    """
-    Dado una pregunta en lenguaje natural, devuelve la tabla más relevante
-    según similitud semántica con su descripción.
-
-    Ejemplo:
-        r = httpx.post("/query/json", json={"question": "¿Qué productos hay disponibles?"})
-        # → {"id": "tabla_1", "nombre": "productos", "ddl": "CREATE TABLE ..."}
-    """
-    if text_collection.count() == 0:
+    """Consulta una tabla relevante y devuelve la respuesta generada por Gemini."""
+    if text_collection is None or text_collection.count() == 0:
         raise HTTPException(503, "Colección vacía. Ingesta documentos primero.")
 
     chunks = retrieve_chunks(request.question, text_collection, n_results=1)
@@ -460,11 +296,4 @@ async def query_json(request: QueryRequest):
         raise HTTPException(404, "No se encontró ninguna tabla relevante.")
 
     best = chunks[0]
-
-    return build_rag_response(question = request.question, ddl = best["metadata"]["ddl"])
-#    return {
-#        "id":       best["metadata"]["nombre"],  
-#        "nombre":   best["metadata"]["nombre"],
-#        "ddl":      best["metadata"]["ddl"],
-#        "distance": best["distance"],
-#    }
+    return build_rag_response(request.question, best["metadata"]["ddl"])
