@@ -112,7 +112,7 @@ Entrada:
 
 Salida esperada:
 
-  una respuesta generada por Gemini basada en el esquema DDL disponible, normalmente en formato SQL.
+  una respuesta generada por Gemini basada en el esquema DDL disponible en formato SQL.
 
 ---
 
