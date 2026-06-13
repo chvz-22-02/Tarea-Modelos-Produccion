@@ -1,6 +1,6 @@
 # RAG Compliance API
 
-API FastAPI de tipo “clase” para consultar esquemas de base de datos mediante RAG y Gemini.
+Tarea Modelos en Producción: Solución para consultar esquemas de base de datos mediante RAG y generar instrucciones SQL con Gemini.
 
 ## 1. Qué hace este proyecto
 
@@ -10,8 +10,6 @@ Este servicio expone una API REST que:
 - recupera información relevante desde una colección ChromaDB,
 - genera una respuesta útil (SQL/DDL contextualizado) con Gemini
 - y puede ejecutarse en contenedor Docker.
-
-Es una implementación de la idea descrita en el PDF: una API como la de clase, con un endpoint principal que responde a una entrada del usuario.
 
 ---
 
@@ -39,8 +37,6 @@ Construir una pequeña aplicación de IA/ML empaquetada en Docker, que:
   - Health check
 - POST /ingest
   - Indexa documentos JSON con definiciones DDL
-- POST /query
-  - Consulta con soporte multipart (texto e imagen opcional)
 - POST /query/json
   - Consulta en JSON puro
 
@@ -61,44 +57,7 @@ La documentación interactiva de la API queda disponible en:
 
 ---
 
-## 5. Ejecutar localmente
-
-1. Entrar a la carpeta del proyecto:
-
-   cd rag-api
-
-2. Crear el entorno virtual (si aún no existe):
-
-   python -m venv .venv
-
-3. Activar el entorno:
-
-   .\.venv\Scripts\activate
-
-4. Instalar dependencias con el gestor del proyecto:
-
-   uv sync
-
-   Si prefieres usar pip directamente, puedes instalar desde pyproject:
-
-   pip install -e .
-
-5. Definir la variable de entorno:
-
-   set GOOGLE_API_KEY=tu_api_key_aqui
-
-6. Levantar la API:
-
-   uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-La API quedará disponible en:
-
-- http://localhost:8000
-- http://localhost:8000/docs
-
----
-
-## 6. Ejecutar con Docker
+## 5. Ejecutar con Docker
 
 ### Opción A: con Docker Compose
 
@@ -124,7 +83,7 @@ Para detenerlo:
 
    docker compose down
 
-### Opción B: con docker run
+### Opción B: con docker run (ejecución del notebook notebook_demostracion.ipynb)
 
 Construir la imagen:
 
@@ -134,11 +93,10 @@ Correr la imagen:
 
    docker run --rm -p 8000:8000 -e GOOGLE_API_KEY=tu_api_key_aqui rag-compliance-api
 
-Este es el flujo recomendado por la rúbrica del PDF: la imagen arranca con un comando simple y la API key se inyecta en runtime.
 
 ---
 
-## 7. Ejemplo de uso
+## 6. Ejemplo de uso
 
 ### Ejemplo 1: consulta JSON
 
@@ -158,7 +116,7 @@ Salida esperada:
 
 ---
 
-## 8. Datos de ejemplo
+## 7. Datos de ejemplo
 
 El proyecto incluye un archivo de ejemplo en:
 
@@ -234,7 +192,7 @@ Este archivo se usa para cargar definiciones de tablas y enriquecer la consulta 
 
 ---
 
-## 9. Notas importantes para evaluación
+## 8. Notas importantes para evaluación
 
 - La imagen se levanta con un comando simple.
 - La API key se pasa con -e GOOGLE_API_KEY=... en runtime.
@@ -243,7 +201,7 @@ Este archivo se usa para cargar definiciones de tablas y enriquecer la consulta 
 
 ---
 
-## 10. Resumen rápido
+## 9. Resumen rápido
 
 Si quieres probarla rápidamente:
 
