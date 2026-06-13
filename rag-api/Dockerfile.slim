@@ -1,0 +1,34 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.slim — demostración del impacto de la imagen base (Bloque 02)
+#
+# Úsalo para comparar tamaños de imagen en terminal:
+#
+#   # Versión GRANDE (imagen completa)
+#   docker build -t rag-base-full -f Dockerfile.slim --build-arg BASE=python:3.11 .
+#
+#   # Versión PEQUEÑA (slim)
+#   docker build -t rag-base-slim -f Dockerfile.slim --build-arg BASE=python:3.11-slim .
+#
+#   # Comparar:
+#   docker images | grep rag-base
+#
+# Resultado esperado:
+#   rag-base-full    ~1.0 GB
+#   rag-base-slim    ~130 MB
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG BASE=python:3.11-slim
+FROM ${BASE}
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY app/ ./app/
+COPY data/ ./data/
+
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

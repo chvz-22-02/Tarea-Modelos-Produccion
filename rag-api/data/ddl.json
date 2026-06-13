@@ -1,0 +1,20 @@
+[
+  {
+    "id": "tabla_1",
+    "nombre": "productos",
+    "descripcion": "Catálogo de productos disponibles en una tienda en línea. Almacena el nombre, categoría, precio unitario y nivel de stock de cada artículo. Permite gestionar el inventario y consultar disponibilidad de productos.",
+    "ddl": "CREATE TABLE productos (\n    id_producto     SERIAL        PRIMARY KEY,\n    nombre          VARCHAR(150)  NOT NULL,\n    categoria       VARCHAR(80),\n    precio          NUMERIC(10,2) NOT NULL,\n    stock           INT           DEFAULT 0,\n    creado_en       TIMESTAMP     DEFAULT NOW()\n);"
+  },
+  {
+    "id": "tabla_2",
+    "nombre": "empleados",
+    "descripcion": "Registro del personal de una empresa. Contiene datos personales y laborales de cada empleado, como su nombre, departamento al que pertenece, cargo, salario y fecha de ingreso. Facilita la gestión de recursos humanos.",
+    "ddl": "CREATE TABLE empleados (\n    id_empleado     SERIAL        PRIMARY KEY,\n    nombre          VARCHAR(100)  NOT NULL,\n    apellido        VARCHAR(100)  NOT NULL,\n    departamento    VARCHAR(80),\n    cargo           VARCHAR(80),\n    salario         NUMERIC(12,2),\n    fecha_ingreso   DATE\n);"
+  },
+  {
+    "id": "tabla_3",
+    "nombre": "reservas",
+    "descripcion": "Registro de reservas de habitaciones en un hotel. Guarda la información del huésped, las fechas de entrada y salida, el tipo de habitación reservada y el estado actual de la reserva (confirmada, cancelada, pendiente).",
+    "ddl": "CREATE TABLE reservas (\n    id_reserva        SERIAL        PRIMARY KEY,\n    nombre_huesped    VARCHAR(150)  NOT NULL,\n    fecha_entrada     DATE          NOT NULL,\n    fecha_salida      DATE          NOT NULL,\n    tipo_habitacion   VARCHAR(60),\n    estado            VARCHAR(20)   DEFAULT 'pendiente',\n    creado_en         TIMESTAMP     DEFAULT NOW()\n);"
+  }
+]

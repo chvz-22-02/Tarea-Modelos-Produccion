@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.multistage — multi-stage build (plus / avanzado)
+#
+# Concepto: usar una etapa "builder" con todas las herramientas de build,
+# y copiar solo el resultado al contenedor final. La imagen final es más
+# pequeña y no contiene compiladores ni herramientas de build.
+#
+# Úsalo para comparar con el Dockerfile estándar:
+#
+#   docker build -t rag-multistage -f Dockerfile.multistage .
+#   docker images | grep rag
+#
+# En este caso la diferencia es pequeña porque uv ya usa slim y --no-dev.
+# La ganancia es mayor en proyectos con dependencias que requieren compilación
+# (C extensions, Rust, etc.).
+#
+# Patrón común en producción:
+#   Stage 1 (builder) → instalar deps, compilar wheels, correr tests
+#   Stage 2 (runtime) → solo el venv y el código, sin build tools
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: builder ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Instalar deps en un venv explícito dentro de /app/.venv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+# ── Stage 2: runtime ──────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Copiar solo el venv compilado desde el builder — sin uv, sin pip
+COPY --from=builder /app/.venv /app/.venv
+
+# Copiar código y datos
+COPY app/ ./app/
+COPY data/ ./data/
+
+# Activar el venv copiado añadiéndolo al PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
